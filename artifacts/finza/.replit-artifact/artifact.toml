@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Finza — AI Finance Tracker"
+description = "A personal finance tracker for organizing spending, setting category budgets, and getting AI-powered money insights with native MAD currency support."
+version = "1.0.0"
+id = "artifacts/finza"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18100
+
+[services.development]
+run = "pnpm --filter @workspace/finza run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/finza", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/finza/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18100"
+BASE_PATH = "/"
