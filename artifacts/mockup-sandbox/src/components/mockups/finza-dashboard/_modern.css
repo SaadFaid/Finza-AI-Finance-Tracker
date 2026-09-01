@@ -1,0 +1,82 @@
+.modern-theme {
+  --background: 220 32% 8%;
+  --foreground: 195 36% 94%;
+  --card: 221 29% 12%;
+  --card-foreground: 195 36% 94%;
+  --popover: 222 31% 15%;
+  --popover-foreground: 195 36% 94%;
+  --primary: 172 76% 54%;
+  --primary-foreground: 220 32% 8%;
+  --secondary: 221 23% 18%;
+  --secondary-foreground: 195 36% 94%;
+  --muted: 221 23% 15%;
+  --muted-foreground: 211 17% 65%;
+  --accent: 42 92% 68%;
+  --accent-foreground: 220 32% 8%;
+  --destructive: 5 78% 69%;
+  --destructive-foreground: 220 32% 8%;
+  --border: 218 22% 25%;
+  --input: 218 22% 29%;
+  --ring: 172 76% 54%;
+  --chart-1: 172 76% 54%;
+  --chart-2: 42 92% 68%;
+  --chart-3: 202 82% 70%;
+  --sidebar: 222 34% 10%;
+  --sidebar-foreground: 195 36% 94%;
+  --sidebar-border: 218 24% 21%;
+  --sidebar-primary: 172 76% 54%;
+  --sidebar-primary-foreground: 220 32% 8%;
+  --sidebar-accent: 172 38% 18%;
+  --sidebar-accent-foreground: 172 76% 80%;
+}
+
+.modern-theme .app-noise {
+  background-image:
+    radial-gradient(ellipse 75% 45% at 80% -10%, hsl(172 76% 54% / .09), transparent 68%),
+    radial-gradient(ellipse 65% 45% at 12% 100%, hsl(202 82% 70% / .05), transparent 70%);
+}
+
+.modern-theme .app-noise::after {
+  opacity: .018;
+  box-shadow: inset 0 0 180px hsl(172 76% 54% / .06);
+}
+
+.modern-theme .panel {
+  background:
+    linear-gradient(145deg, hsl(221 29% 15% / .98), hsl(221 29% 11% / .98));
+  border-color: hsl(218 22% 25%);
+  box-shadow:
+    0 24px 70px hsl(220 40% 3% / .3),
+    inset 0 1px 0 hsl(195 36% 94% / .035);
+}
+
+.modern-theme .panel-hover:hover {
+  border-color: hsl(172 76% 54% / .55);
+  box-shadow:
+    0 24px 70px hsl(172 76% 54% / .11),
+    inset 0 1px 0 hsl(195 36% 94% / .05);
+}
+
+.modern-theme .btn-primary {
+  min-height: 2.75rem;
+  border-radius: .8rem;
+  box-shadow: 0 0 0 1px hsl(195 36% 94% / .08) inset;
+}
+
+.modern-theme .btn-primary:hover {
+  background: hsl(172 78% 62%);
+  box-shadow: 0 10px 30px hsl(172 76% 54% / .28);
+}
+
+.modern-theme .btn-ghost {
+  min-height: 2.75rem;
+  border-radius: .8rem;
+  transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+}
+
+.modern-theme .btn-ghost:hover {
+  border-color: hsl(172 76% 54% / .5);
+  background: hsl(172 76% 54% / .1);
+  color: hsl(172 76% 54%);
+  transform: translateY(-1px);
+}
