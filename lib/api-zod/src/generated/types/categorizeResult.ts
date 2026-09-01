@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface CategorizeResult {
+  category: string;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  confidence: number;
 }

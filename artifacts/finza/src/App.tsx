@@ -1,62 +1,206 @@
-import { type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
+import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
+import {
+  ArrowDownRight, ArrowUpRight, BarChart3, Bell, BrainCircuit, Check, CircleDollarSign,
+  Download, FileText, Filter, Home, Lightbulb, Menu, MoreHorizontal, Pencil, Plus,
+  Search, Settings2, Sparkles, Target, Trash2, TrendingDown, TrendingUp, Wallet, X, Zap,
+} from 'lucide-react';
+import {
+  getGetDashboardQueryKey, getListBudgetsQueryKey, getListTransactionsQueryKey,
+  getListInsightsQueryKey,
+  useCategorizeTransaction, useCreateTransaction, useDeleteTransaction, useGetDashboard,
+  useListBudgets, useListInsights, useListTransactions, useUpdateTransaction, useUpsertBudget,
+} from '@workspace/api-client-react';
+import type { Budget, DashboardSummary, Insight, Transaction } from '@workspace/api-client-react';
+import NotFound from '@/pages/not-found';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/not-found';
-import {
-  Route,
-  Switch,
-  useLocation,
-  Router as WouterRouter,
-} from 'wouter';
 
 const queryClient = new QueryClient();
+const demoSummary: DashboardSummary = {
+  totalBalance: 24680.5, monthlySpend: 8430.75, monthlyIncome: 16200, savingsRate: 47.9,
+  spendChange: -8.4,
+  spendByCategory: [
+    { category: 'Home', amount: 2850, color: '#50dfd0' }, { category: 'Food', amount: 2190, color: '#f7c76a' },
+    { category: 'Transport', amount: 1380, color: '#82b9f4' }, { category: 'Leisure', amount: 1010, color: '#cf9fe4' },
+  ],
+  weeklySpend: [{ day: 'Mon', amount: 480 }, { day: 'Tue', amount: 760 }, { day: 'Wed', amount: 390 }, { day: 'Thu', amount: 970 }, { day: 'Fri', amount: 610 }, { day: 'Sat', amount: 820 }, { day: 'Sun', amount: 510 }],
+  recentTransactions: [
+    { id: 1, amount: 145, category: 'Food', description: 'Café Maure', date: '2025-05-26', type: 'expense', aiConfidence: .98 },
+    { id: 2, amount: 1250, category: 'Income', description: 'Freelance project', date: '2025-05-25', type: 'income', aiConfidence: null },
+    { id: 3, amount: 680, category: 'Home', description: 'Marjane Market', date: '2025-05-24', type: 'expense', aiConfidence: .94 },
+    { id: 4, amount: 220, category: 'Transport', description: 'Careem ride', date: '2025-05-23', type: 'expense', aiConfidence: .91 },
+  ],
+};
+const demoBudgets: Budget[] = [
+  { id: 1, category: 'Home', limitAmount: 4000, spentAmount: 2850, month: '2025-05', color: '#50dfd0' },
+  { id: 2, category: 'Food', limitAmount: 2800, spentAmount: 2190, month: '2025-05', color: '#f7c76a' },
+  { id: 3, category: 'Transport', limitAmount: 1800, spentAmount: 1380, month: '2025-05', color: '#82b9f4' },
+  { id: 4, category: 'Leisure', limitAmount: 1500, spentAmount: 1010, month: '2025-05', color: '#cf9fe4' },
+];
+const demoInsights: Insight[] = [
+  { id: '1', title: 'Your weekday lunches are trending down', body: 'You spent 18% less on weekday lunches this month. That is the kind of small shift that keeps your savings rate healthy.', category: 'Food', impact: 'positive', createdAt: '2025-05-26' },
+  { id: '2', title: 'Home is close to its monthly rhythm', body: 'Home spending is at 71% of your plan with 5 days still to go. A quiet week here keeps your balance on track.', category: 'Home', impact: 'neutral', createdAt: '2025-05-25' },
+  { id: '3', title: 'A gentle watch on weekend rides', body: 'Transport is moving 12% faster than last month, mostly from Saturday rides. Nothing urgent — just a useful signal.', category: 'Transport', impact: 'warning', createdAt: '2025-05-24' },
+];
+const categories = ['Food', 'Home', 'Transport', 'Leisure', 'Health', 'Shopping', 'Income', 'Other'];
+const formatMAD = (amount: number) => `${new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(amount))} MAD`;
+const shortDate = (value: string) => new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(new Date(value));
 
-function Home() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Replit Agent is building...
-        </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Your app will appear here once it's ready.
-        </p>
-      </div>
-    </div>
-  );
+function Logo({ large = false }: { large?: boolean }) {
+  return <div className={`flex items-center gap-2 ${large ? 'text-2xl' : 'text-lg'}`}><span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal font-display font-bold text-[hsl(var(--primary-foreground))]">f.</span><span className="font-display font-bold tracking-[-.04em]">finza</span></div>;
 }
-
-function Router() {
-  return (
-    // Keep a shared shell (sidebar, navbar) outside the boundary so it
-    // survives a page crash.
-    <RoutedErrorBoundary>
-      <Switch>
-        <Route path="/" component={Home} />
-        <Route component={NotFound} />
-      </Switch>
-    </RoutedErrorBoundary>
-  );
+function EmptyIllustration({ title, copy, action }: { title: string; copy: string; action?: ReactNode }) {
+  return <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[hsl(var(--primary)/.3)] bg-[hsl(var(--primary)/.035)] px-6 py-14 text-center"><div className="relative mb-5 h-20 w-24"><div className="absolute left-4 top-3 h-14 w-16 rotate-[-9deg] rounded-2xl border-2 border-[hsl(var(--primary)/.5)]" /><div className="absolute left-7 top-0 h-14 w-16 rotate-[9deg] rounded-2xl border-2 border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.08)]" /><CircleDollarSign className="absolute left-12 top-4 text-[hsl(var(--primary))]" size={26} /></div><h3 className="font-display text-lg font-bold">{title}</h3><p className="mt-2 max-w-sm text-sm text-[hsl(var(--muted-foreground))]">{copy}</p>{action && <div className="mt-5">{action}</div>}</div>;
 }
-
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+function LoadingBlocks({ rows = 4 }: { rows?: number }) {
+  return <div className="space-y-3">{Array.from({ length: rows }).map((_, i) => <div key={i} className="flex items-center gap-3 rounded-xl border border-[hsl(var(--border))] p-4"><div className="skeleton h-10 w-10 rounded-xl" /><div className="flex-1 space-y-2"><div className="skeleton h-3 w-32" /><div className="skeleton h-2.5 w-20" /></div><div className="skeleton h-4 w-20" /></div>)}</div>;
+}
+function ErrorNotice({ onRetry }: { onRetry: () => void }) {
+  return <div className="rounded-xl border border-[hsl(var(--destructive)/.35)] bg-[hsl(var(--destructive)/.08)] p-4 text-sm text-[hsl(var(--destructive))]">Finza could not reach your money data right now. <button className="ml-2 underline" onClick={onRetry} data-testid="button-retry">Try again</button></div>;
+}
+function Sidebar({ onClose }: { onClose?: () => void }) {
   const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+  const nav = [{ href: '/dashboard', label: 'Overview', icon: Home }, { href: '/transactions', label: 'Transactions', icon: FileText }, { href: '/budgets', label: 'Budgets', icon: Target }, { href: '/insights', label: 'AI insights', icon: BrainCircuit }];
+  return <aside className="flex h-full w-64 flex-col border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] p-5"><div className="mb-12 flex items-center justify-between px-2"><Logo />{onClose && <button onClick={onClose} className="btn-ghost rounded-lg p-2" data-testid="button-close-menu"><X size={16} /></button>}</div><div className="mb-4 px-2 text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--muted-foreground))]">Your money</div><nav className="space-y-1">{nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={onClose} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${location === href ? 'bg-[hsl(var(--primary)/.12)] font-bold text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))] hover:text-[hsl(var(--foreground))]'}`} data-testid={`link-${label.toLowerCase().replace(' ', '-')}`}><Icon size={17} /><span>{label}</span>{label === 'AI insights' && <span className="ml-auto rounded-full bg-[hsl(var(--accent)/.16)] px-2 py-0.5 text-[10px] text-[hsl(var(--accent))]">new</span>}</Link>)}</nav><div className="mt-auto space-y-1"><Link href="/settings" onClick={onClose} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm ${location === '/settings' ? 'bg-[hsl(var(--primary)/.12)] text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]'}`} data-testid="link-settings"><Settings2 size={17} />Settings</Link><div className="mt-4 flex items-center gap-3 border-t border-[hsl(var(--border))] pt-5"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-[hsl(var(--accent)/.18)] text-xs font-bold text-[hsl(var(--accent))]">YA</div><div className="min-w-0"><div className="truncate text-sm font-semibold">Yasmine A.</div><div className="text-xs text-[hsl(var(--muted-foreground))]">Personal space</div></div></div></div></aside>;
 }
-
+function Shell({ children }: { children: ReactNode }) {
+  const { signOut } = useClerk();
+  const [open, setOpen] = useState(false);
+  return <div className="app-noise min-h-[100dvh] bg-[hsl(var(--background))]"><div className="hidden md:fixed md:inset-y-0 md:flex"><Sidebar /></div>{open && <div className="fixed inset-0 z-50 flex md:hidden"><div className="absolute inset-0 bg-[hsl(222_35%_3%/.7)]" onClick={() => setOpen(false)} /><div className="relative"><Sidebar onClose={() => setOpen(false)} /></div></div>}<main className="min-h-[100dvh] md:pl-64"><header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[hsl(var(--border)/.7)] bg-[hsl(var(--background)/.85)] px-5 backdrop-blur-xl md:px-10"><button className="btn-ghost rounded-lg p-2 md:hidden" onClick={() => setOpen(true)} data-testid="button-open-menu"><Menu size={19} /></button><div className="hidden text-xs text-[hsl(var(--muted-foreground))] md:block"><span className="text-[hsl(var(--primary))]">PERSONAL SPACE</span><span className="mx-2">/</span>May 2025</div><div className="ml-auto flex items-center gap-3"><button className="btn-ghost rounded-lg p-2" onClick={() => alert('You are all caught up.')} data-testid="button-notifications"><Bell size={17} /></button><button className="hidden text-right sm:block" onClick={() => signOut({ redirectUrl: basePath || '/' })}><div className="text-xs font-semibold">Good morning, Yasmine</div><div className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">CASABLANCA · 09:42</div></button></div></header>{children}</main></div>;
+}
+function Heading({ eyebrow, title, action }: { eyebrow: string; title: string; action?: ReactNode }) {
+  return <div className="mb-7 flex items-end justify-between gap-4"><div><div className="mb-2 text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">{eyebrow}</div><h1 className="font-display text-3xl font-bold tracking-[-.05em] md:text-4xl">{title}</h1></div>{action}</div>;
+}
+function Metric({ label, value, note, positive, icon: Icon }: { label: string; value: string; note: string; positive?: boolean; icon: typeof Wallet }) {
+  return <div className="panel panel-hover entrance rounded-2xl p-5"><div className="mb-5 flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">{label}</span><span className="rounded-lg bg-[hsl(var(--primary)/.1)] p-2 text-[hsl(var(--primary))]"><Icon size={16} /></span></div><div className="font-display text-2xl font-bold tracking-[-.04em]">{value}</div><div className={`mt-2 flex items-center gap-1 text-xs ${positive ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>{positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}{note}</div></div>;
+}
+function TransactionRows({ transactions, onEdit, onDelete, compact = false }: { transactions: Transaction[]; onEdit?: (t: Transaction) => void; onDelete?: (t: Transaction) => void; compact?: boolean }) {
+  return <div className="divide-y divide-[hsl(var(--border))]">{transactions.map((t) => <div className="group flex items-center gap-3 py-4 first:pt-0 last:pb-0" key={t.id} data-testid={`row-transaction-${t.id}`}><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.type === 'income' ? 'bg-[hsl(var(--primary)/.12)] text-[hsl(var(--primary))]' : 'bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]'}`}>{t.type === 'income' ? <ArrowUpRight size={17} /> : <CircleDollarSign size={17} />}</div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{t.description}</div><div className="mt-1 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><span>{t.category}</span><span>·</span><span>{shortDate(t.date)}</span>{t.aiConfidence && <span className="hidden rounded bg-[hsl(var(--primary)/.1)] px-1.5 py-0.5 text-[10px] text-[hsl(var(--primary))] sm:inline">AI {Math.round(t.aiConfidence * 100)}%</span>}</div></div><div className={`font-mono text-xs sm:text-sm ${t.type === 'income' ? 'text-[hsl(var(--primary))]' : ''}`}>{t.type === 'income' ? '+' : '−'}{formatMAD(t.amount)}</div>{!compact && <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"><button className="btn-ghost rounded-lg p-2" onClick={() => onEdit?.(t)} data-testid={`button-edit-transaction-${t.id}`}><Pencil size={14} /></button><button className="btn-ghost rounded-lg p-2 text-[hsl(var(--destructive))]" onClick={() => onDelete?.(t)} data-testid={`button-delete-transaction-${t.id}`}><Trash2 size={14} /></button></div>}</div>)}</div>;
+}
+function Dashboard() {
+  const { isLoaded, isSignedIn } = useAuth(); const query = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey(), enabled: isLoaded && Boolean(isSignedIn) } }); const data = !isLoaded || query.isLoading ? undefined : query.data ?? demoSummary; const maxWeek = Math.max(...(data?.weeklySpend ?? []).map((x) => x.amount), 1);
+  return <Shell><div className="mx-auto max-w-[1500px] p-5 md:p-10"><Heading eyebrow="Overview · May 2025" title="Your money, in focus." action={<Link href="/transactions" className="btn-primary flex items-center gap-2 px-4 py-2.5 text-sm" data-testid="link-add-from-dashboard"><Plus size={16} />Add transaction</Link>} />{query.isError && <div className="mb-5"><ErrorNotice onRetry={() => query.refetch()} /></div>}{query.isLoading ? <LoadingBlocks rows={3} /> : data && <><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Metric label="Total balance" value={formatMAD(data.totalBalance)} note="Up 6.2% from April" positive icon={Wallet} /><Metric label="Spent this month" value={formatMAD(data.monthlySpend)} note={`${Math.abs(data.spendChange)}% vs last month`} positive={data.spendChange < 0} icon={ArrowDownRight} /><Metric label="Income" value={formatMAD(data.monthlyIncome)} note="Across 2 sources" positive icon={ArrowUpRight} /><Metric label="Savings rate" value={`${data.savingsRate.toFixed(1)}%`} note="A calm, steady pace" positive icon={Sparkles} /></div><div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_1fr]"><div className="panel entrance delay-1 rounded-2xl p-6"><div className="mb-8 flex items-start justify-between"><div><h2 className="font-display text-lg font-bold">This week</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Your spending pulse, day by day.</p></div><div className="rounded-lg bg-[hsl(var(--primary)/.1)] p-2 text-[hsl(var(--primary))]"><BarChart3 size={18} /></div></div><div className="flex h-48 items-end gap-2 sm:gap-5">{data.weeklySpend.map((day) => <div className="group flex flex-1 flex-col items-center gap-3" key={day.day}><div className="relative flex h-36 w-full items-end justify-center"><div className="w-full max-w-[34px] rounded-t-lg bg-[hsl(var(--primary)/.24)] transition-all duration-300 group-hover:bg-[hsl(var(--primary))]" style={{ height: `${Math.max((day.amount / maxWeek) * 100, 7)}%` }} /></div><span className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{day.day}</span></div>)}</div></div><div className="panel entrance delay-2 rounded-2xl p-6"><div className="mb-7 flex items-start justify-between"><div><h2 className="font-display text-lg font-bold">Where it goes</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">A softer look at your month.</p></div><MoreHorizontal className="text-[hsl(var(--muted-foreground))]" size={19} /></div>{data.spendByCategory.map((item) => <div className="mb-5 last:mb-0" key={item.category}><div className="mb-2 flex justify-between text-sm"><span>{item.category}</span><span className="font-mono text-xs text-[hsl(var(--muted-foreground))]">{formatMAD(item.amount)}</span></div><div className="h-2 overflow-hidden rounded-full bg-[hsl(var(--secondary))]"><div className="h-full rounded-full" style={{ width: `${Math.min((item.amount / data.monthlySpend) * 225, 100)}%`, background: item.color }} /></div></div>)}</div></div><div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_1fr]"><div className="panel entrance delay-3 rounded-2xl p-6"><div className="mb-6 flex items-center justify-between"><div><h2 className="font-display text-lg font-bold">Recent activity</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">The latest moves in your space.</p></div><Link href="/transactions" className="text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-view-all">View all →</Link></div><TransactionRows transactions={data.recentTransactions} compact /></div><div className="panel entrance delay-4 rounded-2xl bg-[hsl(var(--primary)/.08)] p-6"><div className="mb-6 flex items-center gap-3"><div className="rounded-xl bg-[hsl(var(--primary))] p-2 text-[hsl(var(--primary-foreground))]"><Lightbulb size={17} /></div><div><h2 className="font-display text-lg font-bold">A small nudge</h2><p className="text-xs text-[hsl(var(--muted-foreground))]">From Finza AI</p></div></div><p className="text-lg leading-relaxed">You are <span className="font-bold text-[hsl(var(--primary))]">8.4% lighter</span> on spending than last month. Keep the rhythm — no need to over-correct.</p><Link href="/insights" className="mt-7 inline-flex items-center gap-2 text-xs font-bold text-[hsl(var(--primary))]" data-testid="link-read-insights">Read your insights <ArrowUpRight size={14} /></Link></div></div></>}</div></Shell>;
+}
+function TransactionModal({ editing, onClose, onSaved }: { editing?: Transaction; onClose: () => void; onSaved: () => void }) {
+  const create = useCreateTransaction(); const update = useUpdateTransaction(); const categorize = useCategorizeTransaction();
+  const [form, setForm] = useState({ amount: editing?.amount?.toString() ?? '', description: editing?.description ?? '', category: editing?.category ?? 'Food', date: editing?.date ?? '2025-05-27', type: editing?.type ?? 'expense' as 'income' | 'expense' }); const [suggesting, setSuggesting] = useState(false);
+  const set = (key: string, value: string) => setForm((f) => ({ ...f, [key]: value }));
+  const submit = (e: FormEvent) => { e.preventDefault(); const data = { amount: Number(form.amount), description: form.description, category: form.category, date: form.date, type: form.type as 'income' | 'expense' }; if (!data.amount || !data.description) return; if (editing) update.mutate({ id: editing.id, data }, { onSuccess: onSaved }); else create.mutate({ data }, { onSuccess: onSaved }); };
+  const suggest = () => { if (!form.description) return; setSuggesting(true); categorize.mutate({ data: { description: form.description } }, { onSuccess: (result) => { set('category', result.category); setSuggesting(false); }, onError: () => setSuggesting(false) }); };
+  return <div className="fixed inset-0 z-[60] flex items-end justify-center bg-[hsl(222_35%_3%/.72)] p-0 backdrop-blur-sm sm:items-center sm:p-5" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><form onSubmit={submit} className="panel w-full max-w-lg rounded-t-3xl p-6 sm:rounded-3xl"><div className="mb-6 flex items-start justify-between"><div><div className="mb-1 text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--primary))]">{editing ? 'Edit entry' : 'New entry'}</div><h2 className="font-display text-2xl font-bold">{editing ? 'Tune the details.' : 'Add to your picture.'}</h2></div><button type="button" className="btn-ghost rounded-lg p-2" onClick={onClose} data-testid="button-close-transaction-modal"><X size={17} /></button></div><div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-[hsl(var(--secondary))] p-1]"><button type="button" onClick={() => set('type', 'expense')} className={`rounded-lg py-2 text-sm font-bold ${form.type === 'expense' ? 'bg-[hsl(var(--card))]' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-type-expense">Expense</button><button type="button" onClick={() => set('type', 'income')} className={`rounded-lg py-2 text-sm font-bold ${form.type === 'income' ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))]'}`} data-testid="button-type-income">Income</button></div><div className="grid gap-4"><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Amount <span className="ml-1 text-[hsl(var(--primary))]">MAD</span><input autoFocus type="number" step="0.01" min="0.01" className="field mt-2 text-lg font-bold" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0.00" data-testid="input-transaction-amount" /></label><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">What was this for?<div className="mt-2 flex gap-2"><input className="field" value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="e.g. Café Maure" data-testid="input-transaction-description" /><button type="button" className="btn-ghost shrink-0 px-3" onClick={suggest} disabled={suggesting} data-testid="button-categorize">{suggesting ? '…' : <Sparkles size={16} />}</button></div></label><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Category<select className="field mt-2" value={form.category} onChange={(e) => set('category', e.target.value)} data-testid="select-transaction-category">{categories.map((category) => <option key={category}>{category}</option>)}</select></label><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Date<input type="date" className="field mt-2" value={form.date} onChange={(e) => set('date', e.target.value)} data-testid="input-transaction-date" /></label></div></div><div className="mt-7 flex gap-3"><button type="button" className="btn-ghost flex-1 py-3 text-sm font-bold" onClick={onClose} data-testid="button-cancel-transaction">Cancel</button><button type="submit" className="btn-primary flex-1 py-3 text-sm" disabled={create.isPending || update.isPending} data-testid="button-save-transaction">{create.isPending || update.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add transaction'}</button></div></form></div>;
+}
+function Transactions() {
+  const [search, setSearch] = useState(''); const [type, setType] = useState(''); const [sort, setSort] = useState('date_desc'); const [modal, setModal] = useState<'new' | Transaction | null>(null); const [toast, setToast] = useState('');
+  const { isLoaded, isSignedIn } = useAuth(); const params = useMemo(() => ({ search: search || undefined, type: type ? type as 'income' | 'expense' : undefined, sort: sort as 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' }), [search, type, sort]); const query = useListTransactions(params, { query: { queryKey: getListTransactionsQueryKey(params), enabled: isLoaded && Boolean(isSignedIn) } }); const del = useDeleteTransaction(); const transactions = !isLoaded || query.isLoading ? [] : query.data ?? demoSummary.recentTransactions;
+  const afterSave = () => { setModal(null); setToast('Transaction saved'); queryClient.invalidateQueries({ queryKey: getListTransactionsQueryKey() }); queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() }); setTimeout(() => setToast(''), 2400); };
+  const remove = (t: Transaction) => { if (window.confirm(`Delete ${t.description}?`)) del.mutate({ id: t.id }, { onSuccess: afterSave }); };
+  return <Shell><div className="mx-auto max-w-[1300px] p-5 md:p-10"><Heading eyebrow="Your money · 24 entries" title="Transactions" action={<button className="btn-primary flex items-center gap-2 px-4 py-2.5 text-sm" onClick={() => setModal('new')} data-testid="button-new-transaction"><Plus size={16} />New transaction</button>} /><div className="panel mb-5 rounded-2xl p-3"><div className="flex flex-col gap-3 lg:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-3 text-[hsl(var(--muted-foreground))]" size={17} /><input className="field pl-10" placeholder="Search your transactions" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="input-search-transactions" /></div><div className="flex gap-2"><div className="relative flex-1"><Filter className="pointer-events-none absolute left-3 top-3 text-[hsl(var(--muted-foreground))]" size={15} /><select className="field min-w-[140px] pl-9" value={type} onChange={(e) => setType(e.target.value)} data-testid="select-transaction-type"><option value="">All types</option><option value="expense">Expenses</option><option value="income">Income</option></select></div><select className="field min-w-[165px]" value={sort} onChange={(e) => setSort(e.target.value)} data-testid="select-transaction-sort"><option value="date_desc">Newest first</option><option value="date_asc">Oldest first</option><option value="amount_desc">Highest amount</option><option value="amount_asc">Lowest amount</option></select></div></div></div>{toast && <div className="mb-4 flex items-center gap-2 text-sm text-[hsl(var(--primary))]"><Check size={16} />{toast}</div>}{query.isError && <div className="mb-5"><ErrorNotice onRetry={() => query.refetch()} /></div>}<div className="panel rounded-2xl p-5 md:p-7">{query.isLoading ? <LoadingBlocks /> : transactions.length ? <TransactionRows transactions={transactions} onEdit={(t) => setModal(t)} onDelete={remove} /> : <EmptyIllustration title="A clearer picture starts here." copy="Add your first transaction and Finza will start finding the useful patterns." action={<button className="btn-primary px-4 py-2.5 text-sm" onClick={() => setModal('new')} data-testid="button-empty-new-transaction">Add a transaction</button>} />}</div></div>{modal && <TransactionModal editing={modal === 'new' ? undefined : modal} onClose={() => setModal(null)} onSaved={afterSave} />}</Shell>;
+}
+function Budgets() {
+  const { isLoaded, isSignedIn } = useAuth(); const query = useListBudgets({ query: { queryKey: getListBudgetsQueryKey(), enabled: isLoaded && Boolean(isSignedIn) } }); const upsert = useUpsertBudget(); const [editing, setEditing] = useState<Budget | null>(null); const [amount, setAmount] = useState(''); const budgets = !isLoaded || query.isLoading ? [] : query.data ?? demoBudgets;
+  const save = () => { if (!editing || !Number(amount)) return; upsert.mutate({ category: editing.category, data: { limitAmount: Number(amount), month: editing.month } }, { onSuccess: () => { setEditing(null); queryClient.invalidateQueries({ queryKey: getListBudgetsQueryKey() }); } }); };
+  return <Shell><div className="mx-auto max-w-[1200px] p-5 md:p-10"><Heading eyebrow="Monthly rhythm · May 2025" title="Budgets" action={<button className="btn-ghost flex items-center gap-2 px-4 py-2.5 text-sm font-bold" onClick={() => alert('Choose a category below to set a budget.')} data-testid="button-budget-help"><Target size={16} />How it works</button>} /><div className="mb-6 panel flex flex-col gap-4 rounded-2xl p-6 sm:flex-row sm:items-center sm:justify-between"><div><div className="mb-1 text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--primary))]">Monthly envelope</div><h2 className="font-display text-xl font-bold">Keep the useful limits, skip the guilt.</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Your budgets are a gentle reference, not a rulebook.</p></div><div className="text-left sm:text-right"><div className="font-mono text-xl font-bold">{formatMAD(budgets.reduce((s, b) => s + b.spentAmount, 0))}</div><div className="text-xs text-[hsl(var(--muted-foreground))]">of {formatMAD(budgets.reduce((s, b) => s + b.limitAmount, 0))}</div></div></div>{query.isError && <div className="mb-5"><ErrorNotice onRetry={() => query.refetch()} /></div>}{query.isLoading ? <LoadingBlocks rows={4} /> : budgets.length ? <div className="grid gap-4 md:grid-cols-2">{budgets.map((budget, i) => { const pct = Math.min((budget.spentAmount / budget.limitAmount) * 100, 100); const over = budget.spentAmount > budget.limitAmount; return <div className={`panel panel-hover entrance delay-${(i % 4) + 1} rounded-2xl p-5`} key={budget.id} data-testid={`card-budget-${budget.id}`}><div className="mb-6 flex items-start justify-between"><div className="flex items-center gap-3"><span className="h-3 w-3 rounded-full" style={{ background: budget.color }} /><div><h3 className="font-bold">{budget.category}</h3><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">May 2025</p></div></div><button className="btn-ghost rounded-lg p-2" onClick={() => { setEditing(budget); setAmount(budget.limitAmount.toString()); }} data-testid={`button-edit-budget-${budget.id}`}><Pencil size={14} /></button></div><div className="mb-3 flex items-end justify-between"><span className="font-mono text-lg font-bold">{formatMAD(budget.spentAmount)}</span><span className="text-xs text-[hsl(var(--muted-foreground))]">of {formatMAD(budget.limitAmount)}</span></div><div className="h-2 overflow-hidden rounded-full bg-[hsl(var(--secondary))]"><div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: over ? 'hsl(var(--destructive))' : budget.color }} /></div><div className={`mt-3 flex justify-between text-xs ${over ? 'text-[hsl(var(--destructive))]' : 'text-[hsl(var(--muted-foreground))]'}`}><span>{over ? 'Over your rhythm' : `${Math.round(pct)}% used`}</span><span>{formatMAD(Math.max(budget.limitAmount - budget.spentAmount, 0))} left</span></div></div>; })}</div> : <EmptyIllustration title="Set a softer boundary." copy="Budgets make patterns easier to see. Start with the category that matters most this month." />}</div>{editing && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[hsl(222_35%_3%/.72)] p-5"><div className="panel w-full max-w-sm rounded-3xl p-6"><div className="mb-6 flex items-start justify-between"><div><div className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--primary))]">Edit budget</div><h2 className="mt-1 font-display text-2xl font-bold">{editing.category}</h2></div><button className="btn-ghost rounded-lg p-2" onClick={() => setEditing(null)} data-testid="button-close-budget"><X size={17} /></button></div><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Monthly limit · MAD<input className="field mt-2 text-lg font-bold" type="number" min="1" value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="input-budget-limit" /></label><button className="btn-primary mt-6 w-full py-3 text-sm" onClick={save} data-testid="button-save-budget">{upsert.isPending ? 'Saving…' : 'Save limit'}</button></div></div>}</Shell>;
+}
+function Insights() {
+  const { isLoaded, isSignedIn } = useAuth(); const query = useListInsights({ query: { queryKey: getListInsightsQueryKey(), enabled: isLoaded && Boolean(isSignedIn) } }); const insights = !isLoaded || query.isLoading ? [] : query.data ?? demoInsights;
+  return <Shell><div className="mx-auto max-w-[1100px] p-5 md:p-10"><Heading eyebrow="Finza AI · practical, never preachy" title="A little more clarity." action={<div className="flex items-center gap-2 rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.08)] px-3 py-2 text-xs text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-[hsl(var(--primary))] pulse-teal" />Learning from your rhythm</div>} />{query.isError && <div className="mb-5"><ErrorNotice onRetry={() => query.refetch()} /></div>}{query.isLoading ? <LoadingBlocks rows={3} /> : insights.length ? <div className="space-y-4">{insights.map((insight, i) => <article className={`panel panel-hover entrance delay-${(i % 4) + 1} relative overflow-hidden rounded-2xl p-6 md:p-8`} key={insight.id} data-testid={`card-insight-${insight.id}`}><div className={`absolute left-0 top-0 h-full w-1 ${insight.impact === 'positive' ? 'bg-[hsl(var(--primary))]' : insight.impact === 'warning' ? 'bg-[hsl(var(--accent))]' : 'bg-[hsl(var(--chart-3))]'}`} /><div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between"><div className="max-w-2xl"><div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]"><span className="rounded-full bg-[hsl(var(--secondary))] px-3 py-1">{insight.category}</span><span>·</span><span>{shortDate(insight.createdAt)}</span></div><h2 className="font-display text-2xl font-bold tracking-[-.04em]">{insight.title}</h2><p className="mt-3 text-[15px] leading-7 text-[hsl(var(--muted-foreground))]">{insight.body}</p></div><div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${insight.impact === 'positive' ? 'bg-[hsl(var(--primary)/.12)] text-[hsl(var(--primary))]' : insight.impact === 'warning' ? 'bg-[hsl(var(--accent)/.12)] text-[hsl(var(--accent))]' : 'bg-[hsl(var(--chart-3)/.12)] text-[hsl(var(--chart-3))]'}`}><Lightbulb size={20} /></div></div><div className="mt-6 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><Zap size={14} className="text-[hsl(var(--accent))]" />This is a signal, not a verdict.</div></article>)}</div> : <EmptyIllustration title="Your picture is still developing." copy="Keep adding a few transactions. Finza will surface gentle, practical observations here." />}</div></Shell>;
+}
+function Settings() {
+  const [currency, setCurrency] = useState(() => localStorage.getItem('finza-currency') ?? 'MAD'); const [saved, setSaved] = useState(false);
+  const save = () => { localStorage.setItem('finza-currency', currency); setSaved(true); setTimeout(() => setSaved(false), 2200); };
+  const exportData = () => { const blob = new Blob(['Finza export\nCurrency: MAD\nCreated: 27 May 2025'], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'finza-export.txt'; a.click(); URL.revokeObjectURL(url); };
+  return <Shell><div className="mx-auto max-w-[950px] p-5 md:p-10"><Heading eyebrow="Personal space" title="Settings" />{saved && <div className="mb-5 flex items-center gap-2 text-sm text-[hsl(var(--primary))]"><Check size={16} />Preferences saved</div>}<div className="space-y-4"><section className="panel rounded-2xl p-6 md:p-8"><div className="mb-7 flex items-center gap-3"><div className="rounded-xl bg-[hsl(var(--primary)/.12)] p-2 text-[hsl(var(--primary))]"><CircleDollarSign size={18} /></div><div><h2 className="font-display text-lg font-bold">Your preferences</h2><p className="text-sm text-[hsl(var(--muted-foreground))]">Make Finza feel like yours.</p></div></div><div className="grid gap-6 sm:grid-cols-2"><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Display name<input className="field mt-2" value="Yasmine A." readOnly data-testid="input-display-name" /></label><label className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Primary currency<select className="field mt-2" value={currency} onChange={(e) => setCurrency(e.target.value)} data-testid="select-currency"><option>MAD</option><option>EUR</option><option>USD</option></select></label></div><button className="btn-primary mt-7 px-5 py-3 text-sm" onClick={save} data-testid="button-save-settings">Save preferences</button></section><section className="panel rounded-2xl p-6 md:p-8"><div className="mb-7 flex items-center gap-3"><div className="rounded-xl bg-[hsl(var(--accent)/.12)] p-2 text-[hsl(var(--accent))]"><Download size={18} /></div><div><h2 className="font-display text-lg font-bold">Your data</h2><p className="text-sm text-[hsl(var(--muted-foreground))]">Take your financial history with you.</p></div></div><div className="flex flex-col justify-between gap-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/.35)] p-4 sm:flex-row sm:items-center"><div><div className="text-sm font-bold">Export your Finza data</div><div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">A simple, portable snapshot of your account.</div></div><button className="btn-ghost flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold" onClick={exportData} data-testid="button-export-data"><Download size={15} />Download export</button></div></section><section className="panel rounded-2xl p-6 md:p-8"><div className="mb-6 flex items-center gap-3"><div className="rounded-xl bg-[hsl(var(--chart-3)/.12)] p-2 text-[hsl(var(--chart-3))]"><Bell size={18} /></div><div><h2 className="font-display text-lg font-bold">Notifications</h2><p className="text-sm text-[hsl(var(--muted-foreground))]">A quiet check-in when something is worth seeing.</p></div></div><div className="flex items-center justify-between border-b border-[hsl(var(--border))] py-3 text-sm"><span>Weekly money note</span><span className="rounded-full bg-[hsl(var(--primary)/.14)] px-3 py-1 text-xs font-bold text-[hsl(var(--primary))]">On</span></div><div className="flex items-center justify-between py-3 text-sm"><span>Budget nudges</span><span className="rounded-full bg-[hsl(var(--primary)/.14)] px-3 py-1 text-xs font-bold text-[hsl(var(--primary))]">On</span></div></section></div></div></Shell>;
+}
+function Landing() {
+  return <div className="app-noise min-h-[100dvh] overflow-hidden"><nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-6 md:px-10"><Logo large /><div className="hidden items-center gap-8 text-sm text-[hsl(var(--muted-foreground))] md:flex"><a href="#how" data-testid="link-how-it-works">How it works</a><a href="#calm" data-testid="link-calm">Built for calm</a></div><div className="flex items-center gap-2"><Link href="/sign-in" className="btn-ghost px-3 py-2 text-sm" data-testid="link-sign-in">Sign in</Link><Link href="/dashboard" className="btn-primary px-3 py-2 text-sm" data-testid="link-try-demo-nav">Try demo</Link></div></nav><section className="relative mx-auto max-w-7xl px-5 pb-24 pt-16 md:px-10 md:pb-40 md:pt-28"><div className="pointer-events-none absolute -right-40 top-4 h-[500px] w-[500px] rounded-full bg-[hsl(var(--primary)/.1)] blur-3xl" /><div className="relative max-w-4xl"><div className="entrance mb-7 inline-flex items-center gap-2 rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.07)] px-3 py-2 text-xs font-bold text-[hsl(var(--primary))]"><span className="h-2 w-2 rounded-full bg-[hsl(var(--primary))] pulse-teal" />Made for everyday life in Morocco</div><h1 className="entrance delay-1 max-w-4xl font-display text-5xl font-bold leading-[.98] tracking-[-.075em] md:text-8xl">Money feels better when it <span className="text-[hsl(var(--primary))]">makes sense.</span></h1><p className="entrance delay-2 mt-8 max-w-xl text-lg leading-8 text-[hsl(var(--muted-foreground))]">Finza turns everyday spending in MAD into a calm, useful picture of your financial life — with AI suggestions that respect the person behind the numbers.</p><div className="entrance delay-3 mt-9 flex flex-wrap items-center gap-3"><Link href="/dashboard" className="btn-primary flex items-center gap-2 px-5 py-3.5" data-testid="link-try-demo-hero">Open the demo <ArrowUpRight size={17} /></Link><a href="#how" className="btn-ghost px-5 py-3.5 text-sm font-bold" data-testid="link-see-how">See how it works</a></div></div><div className="entrance delay-4 relative mt-20 grid gap-4 md:grid-cols-[1.1fr_.9fr]"><div className="panel rounded-3xl p-5 shadow-2xl shadow-[hsl(var(--primary)/.08)] md:p-7"><div className="mb-8 flex items-center justify-between"><div><div className="text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">Your overview</div><div className="mt-2 font-display text-2xl font-bold">A clear month.</div></div><div className="rounded-xl bg-[hsl(var(--primary)/.1)] p-3 text-[hsl(var(--primary))]"><Wallet size={20} /></div></div><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-[hsl(var(--secondary)/.72)] p-4"><div className="text-xs text-[hsl(var(--muted-foreground))]">Balance</div><div className="mt-3 font-mono text-xl font-bold">24,680.50</div><div className="mt-1 text-[10px] text-[hsl(var(--primary))]">MAD · +6.2%</div></div><div className="rounded-2xl bg-[hsl(var(--primary)/.1)] p-4"><div className="text-xs text-[hsl(var(--muted-foreground))]">Savings rate</div><div className="mt-3 font-mono text-xl font-bold text-[hsl(var(--primary))]">47.9%</div><div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">steady pace</div></div></div><div className="mt-5 h-28 rounded-2xl bg-[hsl(var(--secondary)/.58)] p-4"><div className="flex h-full items-end gap-2">{[35, 56, 43, 80, 60, 92, 66, 78, 54, 84, 70, 88].map((h, i) => <div key={i} className="flex-1 rounded-t bg-[hsl(var(--primary)/.55)]" style={{ height: `${h}%` }} />)}</div></div></div><div className="panel rounded-3xl bg-[hsl(var(--primary)/.08)] p-6 md:p-7"><div className="mb-12 flex items-center gap-3"><div className="rounded-xl bg-[hsl(var(--primary))] p-2 text-[hsl(var(--primary-foreground))]"><BrainCircuit size={18} /></div><span className="text-xs font-bold uppercase tracking-[.15em] text-[hsl(var(--primary))]">Finza AI</span></div><div className="font-display text-2xl font-bold leading-tight">“Your weekday lunches are trending down.”</div><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Practical observations, in plain language. Never a lecture.</p><div className="mt-10 flex items-center gap-2 text-xs text-[hsl(var(--primary))]"><Sparkles size={14} />One useful thought at a time</div></div></div></section><section id="how" className="border-y border-[hsl(var(--border))] bg-[hsl(var(--secondary)/.22)] py-24"><div className="mx-auto max-w-7xl px-5 md:px-10"><div className="max-w-xl"><div className="mb-3 text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">The Finza way</div><h2 className="font-display text-4xl font-bold tracking-[-.06em] md:text-6xl">Less bookkeeping.<br />More knowing.</h2></div><div className="mt-14 grid gap-4 md:grid-cols-3"><div className="panel panel-hover rounded-2xl p-6"><div className="mb-14 font-mono text-xs text-[hsl(var(--primary))]">01 / SEE</div><h3 className="font-display text-xl font-bold">A living picture</h3><p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Your balance, spending, and savings sit together in one honest, warm overview.</p></div><div className="panel panel-hover rounded-2xl p-6"><div className="mb-14 font-mono text-xs text-[hsl(var(--accent))]">02 / NOTICE</div><h3 className="font-display text-xl font-bold">Useful signals</h3><p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">AI spots the patterns you may miss, then says only what is worth your attention.</p></div><div className="panel panel-hover rounded-2xl p-6"><div className="mb-14 font-mono text-xs text-[hsl(var(--chart-3))]">03 / MOVE</div><h3 className="font-display text-xl font-bold">Small next steps</h3><p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Budgets that bend. Suggestions you can use. Progress that feels like yours.</p></div></div></div></section><section id="calm" className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-8 px-5 py-24 md:flex-row md:items-end md:px-10"><div><div className="mb-3 text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">Start with today</div><h2 className="max-w-2xl font-display text-4xl font-bold leading-tight tracking-[-.06em] md:text-6xl">Your money is already telling a story. Let’s make it easier to hear.</h2></div><Link href="/dashboard" className="btn-primary shrink-0 px-5 py-3.5" data-testid="link-try-demo-footer">Try Finza demo <ArrowUpRight className="ml-2 inline" size={17} /></Link></section><footer className="border-t border-[hsl(var(--border))] px-5 py-7 md:px-10"><div className="mx-auto flex max-w-7xl items-center justify-between text-xs text-[hsl(var(--muted-foreground))]"><Logo /><span>Made for a clearer everyday.</span></div></footer></div>;
+}
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const clerkPubKey = publishableKeyFromHost(window.location.hostname, import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const stripBase = (path: string) => basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#50dfd0',
+    colorForeground: '#e8f1f2',
+    colorMutedForeground: '#8b9aa3',
+    colorDanger: '#ff8f85',
+    colorBackground: '#1b202d',
+    colorInput: '#111722',
+    colorInputForeground: '#e8f1f2',
+    colorNeutral: '#35404d',
+    fontFamily: 'DM Sans, sans-serif',
+    borderRadius: '0.85rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[#1b202d] rounded-3xl w-[440px] max-w-full overflow-hidden',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'font-display text-[#e8f1f2]',
+    headerSubtitle: 'text-[#8b9aa3]',
+    socialButtonsBlockButtonText: 'text-[#e8f1f2]',
+    formFieldLabel: 'text-[#b6c5c9]',
+    footerActionLink: 'text-[#50dfd0]',
+    footerActionText: 'text-[#8b9aa3]',
+    dividerText: 'text-[#8b9aa3]',
+    identityPreviewEditButton: 'text-[#50dfd0]',
+    formFieldSuccessText: 'text-[#50dfd0]',
+    alertText: 'text-[#ff8f85]',
+    logoBox: 'h-9',
+    logoImage: 'h-9',
+    socialButtonsBlockButton: 'border-[#35404d] bg-[#111722]',
+    formButtonPrimary: 'bg-[#50dfd0] text-[#111722] hover:bg-[#72eadc]',
+    formFieldInput: 'border-[#35404d] bg-[#111722] text-[#e8f1f2]',
+    footerAction: 'text-[#8b9aa3]',
+    dividerLine: 'bg-[#35404d]',
+    alert: 'border-[#ff8f85]/40 bg-[#ff8f85]/10',
+    otpCodeFieldInput: 'border-[#35404d] bg-[#111722] text-[#e8f1f2]',
+    formFieldRow: 'text-[#b6c5c9]',
+    main: 'bg-transparent',
+  },
+};
+function SignInPage() {
+  return <div className="app-noise flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-4"><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div>;
+}
+function SignUpPage() {
+  return <div className="app-noise flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--background))] px-4"><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div>;
+}
+function HomeRedirect() {
+  const { isLoaded, isSignedIn } = useAuth();
+  return isLoaded && isSignedIn ? <Redirect to="/dashboard" /> : <Landing />;
+}
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+  useEffect(() => addListener(({ user }) => {
+    const userId = user?.id ?? null;
+    if (previousUserId.current !== undefined && previousUserId.current !== userId) queryClient.clear();
+    previousUserId.current = userId;
+  }), [addListener]);
+  return null;
+}
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+  return <ClerkProvider publishableKey={clerkPubKey} proxyUrl={clerkProxyUrl} appearance={clerkAppearance} signInUrl={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} routerPush={(to) => setLocation(stripBase(to))} routerReplace={(to) => setLocation(stripBase(to), { replace: true })}><QueryClientProvider client={queryClient}><TooltipProvider><ClerkQueryClientCacheInvalidator /><Router /><Toaster /></TooltipProvider></QueryClientProvider></ClerkProvider>;
+}
+function Router() {
+  return <ErrorBoundary><Switch><Route path="/" component={HomeRedirect} /><Route path="/sign-in/*?" component={SignInPage} /><Route path="/sign-up/*?" component={SignUpPage} /><Route path="/dashboard" component={Dashboard} /><Route path="/transactions" component={Transactions} /><Route path="/budgets" component={Budgets} /><Route path="/insights" component={Insights} /><Route path="/settings" component={Settings} /><Route component={NotFound} /></Switch></ErrorBoundary>;
+}
 function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+  if (!clerkPubKey) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in environment');
+  return <WouterRouter base={basePath}><ClerkProviderWithRoutes /></WouterRouter>;
 }
-
 export default App;

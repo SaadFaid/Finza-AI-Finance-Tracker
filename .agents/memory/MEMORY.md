@@ -1,0 +1,1 @@
+- [Generated date inputs](generated-date-inputs.md) — OpenAPI date schemas arrive as JavaScript Dates and need normalization before SQL date writes.

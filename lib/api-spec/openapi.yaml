@@ -10,6 +10,14 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: dashboard
+    description: Finance overview operations
+  - name: transactions
+    description: Transaction operations
+  - name: budgets
+    description: Budget operations
+  - name: insights
+    description: AI insight operations
 paths:
   /healthz:
     get:
@@ -24,6 +32,176 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get finance dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transactions
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [income, expense]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [date_desc, date_asc, amount_desc, amount_asc]
+            default: date_desc
+      responses:
+        "200":
+          description: Transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Create a transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+  /transactions/{id}:
+    patch:
+      operationId: updateTransaction
+      tags: [transactions]
+      summary: Update a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionUpdate"
+      responses:
+        "200":
+          description: Updated transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+    delete:
+      operationId: deleteTransaction
+      tags: [transactions]
+      summary: Delete a transaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted transaction
+  /budgets:
+    get:
+      operationId: listBudgets
+      tags: [budgets]
+      summary: List monthly budgets
+      responses:
+        "200":
+          description: Budgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Budget"
+  /budgets/{category}:
+    put:
+      operationId: upsertBudget
+      tags: [budgets]
+      summary: Create or update a category budget
+      parameters:
+        - name: category
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BudgetInput"
+      responses:
+        "200":
+          description: Saved budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Budget"
+  /insights:
+    get:
+      operationId: listInsights
+      tags: [insights]
+      summary: Get AI-generated spending insights
+      responses:
+        "200":
+          description: Insights
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Insight"
+  /insights/categorize:
+    post:
+      operationId: categorizeTransaction
+      tags: [insights]
+      summary: Categorize a transaction description with AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategorizeInput"
+      responses:
+        "200":
+          description: Suggested category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategorizeResult"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +211,105 @@ components:
           type: string
       required:
         - status
+    Transaction:
+      type: object
+      required: [id, amount, category, description, date, type, aiConfidence]
+      properties:
+        id: { type: number }
+        amount: { type: number }
+        category: { type: string }
+        description: { type: string }
+        date: { type: string, format: date }
+        type: { type: string, enum: [income, expense] }
+        aiConfidence: { type: ["number", "null"] }
+    TransactionInput:
+      type: object
+      required: [amount, category, description, date, type]
+      properties:
+        amount: { type: number, minimum: 0.01 }
+        category: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        date: { type: string, format: date }
+        type: { type: string, enum: [income, expense] }
+        aiConfidence: { type: ["number", "null"] }
+    TransactionUpdate:
+      type: object
+      properties:
+        amount: { type: number, minimum: 0.01 }
+        category: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        date: { type: string, format: date }
+        type: { type: string, enum: [income, expense] }
+        aiConfidence: { type: ["number", "null"] }
+    Budget:
+      type: object
+      required: [id, category, limitAmount, spentAmount, month, color]
+      properties:
+        id: { type: number }
+        category: { type: string }
+        limitAmount: { type: number }
+        spentAmount: { type: number }
+        month: { type: string }
+        color: { type: string }
+    BudgetInput:
+      type: object
+      required: [limitAmount, month]
+      properties:
+        limitAmount: { type: number, minimum: 0.01 }
+        month: { type: string, minLength: 7, maxLength: 7 }
+    DashboardSummary:
+      type: object
+      required: [totalBalance, monthlySpend, monthlyIncome, savingsRate, spendChange, spendByCategory, weeklySpend, recentTransactions]
+      properties:
+        totalBalance: { type: number }
+        monthlySpend: { type: number }
+        monthlyIncome: { type: number }
+        savingsRate: { type: number }
+        spendChange: { type: number }
+        spendByCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategorySpend"
+        weeklySpend:
+          type: array
+          items:
+            $ref: "#/components/schemas/WeeklySpend"
+        recentTransactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+    CategorySpend:
+      type: object
+      required: [category, amount, color]
+      properties:
+        category: { type: string }
+        amount: { type: number }
+        color: { type: string }
+    WeeklySpend:
+      type: object
+      required: [day, amount]
+      properties:
+        day: { type: string }
+        amount: { type: number }
+    Insight:
+      type: object
+      required: [id, title, body, category, impact, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body: { type: string }
+        category: { type: string }
+        impact: { type: string, enum: [positive, neutral, warning] }
+        createdAt: { type: string, format: date-time }
+    CategorizeInput:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, minLength: 1 }
+    CategorizeResult:
+      type: object
+      required: [category, confidence]
+      properties:
+        category: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
 
