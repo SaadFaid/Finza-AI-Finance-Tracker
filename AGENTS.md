@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Replit-originated pnpm workspace monorepo: a dark-theme personal finance tracker (MAD currency). Landing page, dashboard, transaction CRUD with AI categorization, budgets, AI insight cards.
+pnpm workspace monorepo: a dark-theme personal finance tracker (MAD currency). Landing page, dashboard, transaction CRUD with AI categorization, budgets, AI insight cards.
 
 ## Run & Verify
 
@@ -38,7 +38,7 @@ These are NOT documented in any `.env.example`; each service throws at startup i
 - Auth is Clerk. Public landing/demo browseable; persisted data needs a signed-in Clerk session.
 - OpenAPI date inputs generate as JS `Date`; convert to `YYYY-MM-DD` before writing to Drizzle date columns.
 - Keep Clerk CSS layer import after the layer declaration; use generated publishable-key env in the Vite client.
-- The finza Vite config's Replit cartographer/dev-banner plugins only activate when `REPL_ID` is set (skip on local).
+- The finza Vite config's cartographer/dev-banner plugins only activate when `REPL_ID` is set (skip on local).
 - pnpm-workspace.yaml sets `minimumReleaseAge: 1440` (supply-chain defense) — do not disable; use `minimumReleaseAgeExclude` only for trusted packages.
 
 ## Conventions
